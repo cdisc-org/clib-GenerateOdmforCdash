@@ -12,6 +12,8 @@ There are a few options, which you need to set in the source of the class Main:
 - Whether codelists should be loaded and included, in class variable "includeCodeLists"
 - Codelist (CDISC-CT) version in class variable "codeListVersion"
 
+Minor update October 2021, due to changes in the CDISC Library structure
+
 As the software is "open source", with a very liberal MIT license, you can of course alter the source code, and use it in your applications
 
 If you need more detailed information, please contact me at Jozef.Aerts@XML4Pharma.com

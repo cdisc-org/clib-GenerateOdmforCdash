@@ -13,25 +13,20 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 package com.xml4pharma.cdisclibrary.cdash;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.StringReader;
+import java.io.*;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
 
 import javax.xml.parsers.*;
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathExpressionException;
-import javax.xml.xpath.XPathFactory;
+import javax.xml.xpath.*;
 
+import org.apache.log4j.Logger;
 import org.w3c.dom.*;
 import org.xml.sax.*;
 
 import com.xml4pharma.cdisclibrary.BasicCDISCLibraryClient;
+import com.xml4pharma.cdisclibrary.utils.*;
 
 /** The main class for generating CDISC-ODM CDASH forms using the CDISC Library */
 public class Main {
@@ -41,8 +36,10 @@ public class Main {
 	private String message = ""; // for messaging
 	
 	// the codelist version selected (should be done by the user)
+	//private static String codeListVersion = "2020-03-27";
+	//private String cdashVersion = "2-1";
 	private static String codeListVersion = "2021-09-24";
-	private String cdashVersion = "2-2";  // CDASH-IG version
+	private String cdashVersion = "2-2";
 	// whether "CodeList" elements need to be generated
 	private boolean includeCodeLists = true;  
 	
@@ -52,7 +49,7 @@ public class Main {
 	
 	// output 
 	// TODO generate the output file name automatically from the CDASH version
-	private String outputFileLocation = "C:\\CDISC_Library\\CDASH_retrievals_ODM\\temp.xml";
+	private String outputFileLocation = "C:\\CDISC_Library\\CDASH_retrievals_ODM\\CDASH_2_2_CRFs.xml";
 	
 	// FOR TESTING PURPOSES ONLY
 	//private static int maxScenarios = -1;  // negative value means no limitations on the maximum number of scenarios
@@ -66,8 +63,14 @@ public class Main {
 	private String cdashItemDefODMXML = "";
 	private String codeListODMXML = "";
 	
+	// Logging
+	static Logger logger = Logger.getLogger("MYLOGGER");
+	
 	/** Constructor */
 	public Main() {
+		// new mechanism for logger appender
+		LogAppender appender = new LogAppender(logger);
+		appender.createLogAppendersIfNeeded();
 	}
 	
 	/** Main method */
@@ -100,13 +103,13 @@ public class Main {
 
 		// we must iterate over all the classes
 		String classesXML = client.getCDASHClasses(cdashVersion.replace("_","-"));
-		// System.out.print("classesXML = " + classesXML);
+		System.out.println("classesXML = " + classesXML);
 		Document classesDOMDocument = getDOMDocument(classesXML);
 		// construct the query
-		//String query = "/product/cdashig/" + cdashVersion + " /classes";
-		// String rootElement will be reused
+		String query = "/mdr/cdashig/" + cdashVersion + "/classes";
 		String rootElement = classesDOMDocument.getDocumentElement().getNodeName();
-		//message += "Query = " + query + " - root element = " + rootElement + "\n";
+		message += "Query = " + query + " - root element = " + rootElement + "\n";
+		
 		// get the list of classes as a DOM NodeList
 		NodeList classesList = getNodeList(classesDOMDocument, "//class");
 		// Iterate over the nodes
@@ -117,28 +120,32 @@ public class Main {
 			String classHref = getNodeTextContent(classNode, "./href");
 			// single class: get the domains
 			String classXML = client.getCDISCLibraryXML(classHref);
-			//System.out.println("classXML = " + classXML);
+			System.out.println("classXML = " + classXML);
 			Document singleClassDOMDocument = getDOMDocument(classXML);
+			System.out.println("singleClassDOMDocument = " + singleClassDOMDocument);
 			// get the root
 			rootElement = singleClassDOMDocument.getDocumentElement().getNodeName();
 			message += "Query = " + classHref + " - root element = " + rootElement + "\n";
+			System.out.println("message = " + message);
 			// get the list of domains
+			logger.info("Now trying to get the domains for class " + className);
 			NodeList domainNodeList = getNodeList(singleClassDOMDocument, "/cdiscLibrary/product/domain");
+			logger.info("# of domains = " + domainNodeList.getLength());
 			// iterate over the domains
 			for(int i1=0; i1<domainNodeList.getLength(); i1++) {
 				Node singleDomainNode = domainNodeList.item(i1);
 				String domainName = getNodeTextContent(singleDomainNode, "./name");
 				String domainLongName = getNodeTextContent(singleDomainNode, "./label");
-				System.out.println("Domain = " + domainName);
+				logger.info("Treating Domain = " + domainName);
 				// we first need to check whether this domain has scenarios
 				// If so, we need to iterate over the scenarios
 				// If NOT, we can get the fields directly
 				NodeList scenarioNodeList = getNodeList(singleDomainNode, "./_links/scenario");
 				int numScenarios = scenarioNodeList.getLength();
-				System.out.println("# of scenarios = " + scenarioNodeList.getLength());
 				// there are no scenarios for this domain
+				logger.info("# of scenarios = " + numScenarios);
 				if(numScenarios == 0) {
-					System.out.println("Starting generating CDASH form for domain = " + domainName);
+					logger.info("Starting generating CDASH form for domain = " + domainName);
 					String domainHref = getNodeTextContent(singleDomainNode, "./_links/self/href");
 					CDASHScenarioDomain sc = generateScenarioDomain(singleDomainNode, domainName, domainLongName, domainHref);
 					sc.setDomainLongName(domainLongName);
@@ -149,22 +156,24 @@ public class Main {
 						Node scenarioNode = scenarioNodeList.item(i2);
 						String scenarioHref = getNodeTextContent(scenarioNode, "./href");
 						String scenarioXML = client.getCDISCLibraryXML(scenarioHref);
-						System.out.println("scenarioXML = " + scenarioXML);
+						logger.debug("scenarioXML = " + scenarioXML);
 						Document scenarioDOMDocument = getDOMDocument(scenarioXML);
 						String scenarioName = getNodeTextContent(scenarioDOMDocument, "/cdiscLibrary/product/_links/self/title");
 						System.out.println("Starting generating CDASH form for scenario = " + scenarioName);
+						//Node scenarioDetailsNode = getNodeList(scenarioDOMDocument, "/cdiscLibrary/scenario").item(0);
+						// 2021-10-06: /cdiscLibrary/product/scenario delivers the scenario title
+						//Node scenarioDetailsNode = getNodeList(scenarioDOMDocument, "/cdiscLibrary/product/scenario").item(0);
 						Node scenarioDetailsNode = getNodeList(scenarioDOMDocument, "/cdiscLibrary/product").item(0);
 						CDASHScenarioDomain sc = generateScenarioDomain(scenarioDetailsNode, domainName, scenarioName, scenarioHref);
 						sc.setDomainLongName(domainLongName);
 						scenarios.add(sc);
 					}
 				}
-			} 
+			}
 		}
 		// all scenarios and domains have been collected, start generating FormDef elements
 		int count = 0;
-		System.out.println("# of scenarios/domains = " + scenarios.size());
-		// now iterate over the scenarios
+		logger.info("# of scenarios/domains = " + scenarios.size());
 		for(CDASHScenarioDomain sc : scenarios) {
 			count++;
 			// now start generating Forms and ItemGroups
@@ -190,12 +199,14 @@ public class Main {
 			}
 			cdashItemGroupDefODMXML += "<Description><TranslatedText xml:lang=\"en\">" + description + "</TranslatedText></Description>\n";
 			// add the ItemRefs
+			logger.debug("# of ItemRefs for ItemGroupDef with OID " + itemGroupOID + " = " + sc.getCdashFields().size());
+			if(sc.getCdashFields().size() == 0) logger.warn("No ItemRefs for ItemGroup with Name = " + name);
 			for(CDASHField f : sc.getCdashFields()) {
 				cdashItemGroupDefODMXML += "\n" + f.toODMItemRef();
 			}
 			// close the ItemGroup
 			cdashItemGroupDefODMXML += "\n</ItemGroupDef>";
-		} 
+		}
 		// get the unique fields, then generate ItemDefs from them
 		ArrayList<CDASHField> uniqueFields = new ArrayList<CDASHField>();
 		for(CDASHScenarioDomain sc : scenarios) {
@@ -253,7 +264,7 @@ public class Main {
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.out.println("ERROR writing ODM to file = " + outputFileLocation);
-		} 
+		}
 		//
 		System.out.println("Finished writing ODM file to = " + outputFileLocation);
 		System.out.println("DONE");
@@ -342,6 +353,7 @@ public class Main {
 		String codeListXML = client.getCDISCLibraryXML(codeListRef);
 		System.out.println("codeListXML = " + codeListXML);
 		Document codeListDoc = getDOMDocument(codeListXML);
+		System.out.println("codeListDoc = " + codeListDoc);
 		// get all the versions
 		NodeList versionReferences = getNodeList(codeListDoc, "//versions/href");
 		System.out.println("# of associated codelist versions = " + versionReferences.getLength());
@@ -358,9 +370,10 @@ public class Main {
 		System.out.println("to be used codelist reference = " + codeListRefToUse);
 		if(codeListRefToUse != null && codeListRefToUse.length()>0) {
 			codeListXML = client.getCDISCLibraryXML(codeListRefToUse);
+			//System.out.println("codeListXML = " + codeListXML);
+			printStringToFile(codeListXML, new File("C:\\temp\\test.xml"));
 			// now get the VERSIONED codelist
 			if(codeListXML != null && codeListXML.length() > 0) {
-				System.out.println("codeListXML = " + codeListXML);
 				codeListDoc = getDOMDocument(codeListXML);
 				// get the information of the whole codelist itself
 				// and store and assign it to the field
@@ -402,6 +415,19 @@ public class Main {
 			}
 		}
 		return codeList;
+	}
+	
+	/** Prints a string (e.g. XML received from the CDISC Library) to a file.
+	 * Mostly used for testing and debugging */
+	private void printStringToFile(String s, File f) {
+		try {
+			PrintWriter out = new PrintWriter(f);
+			out.print(s);
+			out.close();
+		} catch (FileNotFoundException e) {
+			System.out.println("File cannot be found or generated = " + f.getAbsolutePath());
+			e.printStackTrace();
+		} 
 	}
 	
 	/** Generates a DOM document from an XML string */

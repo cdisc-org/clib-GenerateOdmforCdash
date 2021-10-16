@@ -201,14 +201,14 @@ public class CDASHField {
 		// trying to generate a machine-readable mapping instruction, using an Alias for "SDTM"
 		if(mappingInstructions.contains("populate the SDTMIG variable")) {
 			int posSDTMIGVarPos = mappingInstructions.indexOf("populate the SDTMIG variable") + "populate the SDTMIG variable".length();
-			//System.out.println("index posSDTMIGVarPos = " + posSDTMIGVarPos);
+			System.out.println("index posSDTMIGVarPos = " + posSDTMIGVarPos);
 			if(posSDTMIGVarPos > -1) {
 				String sdtmIGVar = mappingInstructions.substring(posSDTMIGVarPos).trim(); // remove blanks at start and end
 				// now find the first blank, and take the word until that first blank
 				int posFirstBlank = sdtmIGVar.indexOf(" ");
 				if(posFirstBlank > -1) {
 					sdtmIGVar = sdtmIGVar.substring(0,posFirstBlank).trim();
-					//System.out.println("Alias SDTM = " + sdtmIGVar);
+					System.out.println("Alias SDTM = " + sdtmIGVar);
 					xml += "\n" + "<Alias Context=\"SDTM\" Name=\"" + sdtmIGVar + "\"/>";
 				}
 			}

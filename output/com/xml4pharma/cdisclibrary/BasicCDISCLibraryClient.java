@@ -27,9 +27,8 @@ import org.glassfish.jersey.logging.LoggingFeature;  // when adding logging
 public class BasicCDISCLibraryClient {
 	
 	private String base = "https://library.cdisc.org/api";  // the base of the service
-	// 2021-09-28: replaced username/password with API-key
-	// PUT YOUR CDISC-LIBRARY API KEY HERE ...
-	private String apiKey = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+	// TODO 2021-09-28: replace with API-key
+	private String apiKey = "f3582553f103416d905ba73264fb77c5";
 	
 	private Client client;
 	
